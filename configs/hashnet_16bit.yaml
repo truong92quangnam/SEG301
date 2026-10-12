@@ -1,0 +1,25 @@
+dataset: "local_cifar10"
+data_dir: "cifar-10"
+manifest_path: "outputs/splits/manifest_cifar10_survey_source.json"
+model_name: "HashNet"
+backbone: "AlexNet"
+hash_bits: 16
+pretrained: true
+
+training:
+  batch_size: 64
+  epochs: 30
+  lr_backbone: 0.001
+  lr_hash_head: 0.01
+  momentum: 0.9
+  weight_decay: 0.0005
+  gamma: 0.001
+  eval_interval: 5
+  seed: 2021
+  device: "cuda"
+
+evaluation:
+  topk: 44000
+  chunk_size: 200
+  mode: "survey_source"
+

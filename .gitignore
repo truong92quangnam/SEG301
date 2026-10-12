@@ -1,0 +1,24 @@
+# Python virtual environments & bytecode
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Large datasets & raw archives
+cifar-10/
+cifar10/
+data/
+*.parquet
+*.tar.gz
+*.csv.gz
+
+# Checkpoints & heavy model weights
+*.pth
+*.pt
+*.npz
+
+# Outputs & temporary logs (giữ lại outputs/splits/manifest json qua git add nếu cần)
+outputs/experiments/
+*.log

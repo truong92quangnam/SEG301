@@ -150,6 +150,8 @@ PYTHONPATH=. .venv/bin/python -m pytest tests/ -v
   --config configs/hashnet_16bit.yaml \
   --checkpoint outputs/experiments/hashnet_16bit/checkpoint_final.pth
 
+  
+
 # Đánh giá 32-bit
 .venv/bin/python scripts/evaluate.py \
   --config configs/hashnet_32bit.yaml \

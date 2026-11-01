@@ -34,6 +34,7 @@ from src.datasets.cifar10_handler import (
 )
 from src.models.hashnet import HashNetAlexNet
 from src.losses.hashnet_loss import HashNetLoss, ContinuationScheduler
+from src.losses.regularizers import BitDecorrelationAndBalanceLoss
 from src.evaluation.metrics import ChunkedEvaluator
 
 
@@ -45,6 +46,7 @@ def train_one_epoch(
     scheduler: ContinuationScheduler,
     global_step: int,
     device: torch.device,
+    regularizer: nn.Module = None,
 ) -> Tuple[float, int, float]:
     model.train()
     total_loss = 0.0
@@ -60,6 +62,9 @@ def train_one_epoch(
         optimizer.zero_grad()
         h, z = model(images, alpha=current_alpha)
         loss = criterion(h, labels, alpha=current_alpha)
+        if regularizer is not None:
+            reg_loss, _, _ = regularizer(h)
+            loss = loss + reg_loss
         
         loss.backward()
         optimizer.step()
@@ -77,6 +82,7 @@ def main():
     parser.add_argument("--config", type=str, required=True, help="Path to config YAML")
     parser.add_argument("--epochs", type=int, default=None, help="Override epochs")
     parser.add_argument("--output-dir", type=str, default="outputs/experiments", help="Output directory")
+    parser.add_argument("--exp-name", type=str, default=None, help="Experiment name")
     args = parser.parse_args()
 
     with open(args.config, "r") as f:
@@ -127,6 +133,17 @@ def main():
     criterion = HashNetLoss().to(device)
     cont_scheduler = ContinuationScheduler(gamma=gamma)
 
+    # Initialize Bit-Balance & Decorrelation regularizer if requested
+    regularizer = None
+    reg_config = config.get("regularization", {})
+    if reg_config.get("use_decorr_balance", False):
+        lambda_bal = reg_config.get("lambda_balance", 0.1)
+        lambda_dec = reg_config.get("lambda_decorr", 0.1)
+        regularizer = BitDecorrelationAndBalanceLoss(
+            lambda_balance=lambda_bal, lambda_decorr=lambda_dec
+        ).to(device)
+        print(f"Active Regularizer: BitDecorrelationAndBalanceLoss(lambda_balance={lambda_bal}, lambda_decorr={lambda_dec})")
+
     # Differential learning rate: 10x for hash head
     backbone_params = list(model.features.parameters()) + list(model.classifier.parameters())
     hash_head_params = list(model.hash_head.parameters())
@@ -135,7 +152,8 @@ def main():
         {"params": hash_head_params, "lr": config["training"]["lr_hash_head"]},
     ], momentum=config["training"]["momentum"], weight_decay=config["training"]["weight_decay"])
 
-    exp_dir = os.path.join(args.output_dir, f"hashnet_{bits}bit")
+    exp_name = args.exp_name or config.get("exp_name") or f"hashnet_{bits}bit"
+    exp_dir = os.path.join(args.output_dir, exp_name)
     os.makedirs(exp_dir, exist_ok=True)
     log_csv_path = os.path.join(exp_dir, "training_logs.csv")
 
@@ -150,7 +168,7 @@ def main():
     for epoch in range(1, epochs + 1):
         ep_start = time.time()
         loss, global_step, alpha = train_one_epoch(
-            model, train_loader, criterion, optimizer, cont_scheduler, global_step, device
+            model, train_loader, criterion, optimizer, cont_scheduler, global_step, device, regularizer=regularizer
         )
         ep_time = time.time() - ep_start
 

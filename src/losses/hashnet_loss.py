@@ -67,16 +67,17 @@ class HashNetLoss(nn.Module):
         else:
             w = torch.ones_like(S)
             
-        # 4. Numerically stable weighted loss:
-        # log(1 + exp(alpha * u)) can overflow if alpha * u is large.
-        # Use log1p(exp(...)) with clamp or softplus:
-        # softplus(x) = log(1 + exp(x))
-        alpha_u = alpha * u
-        # softplus is numerically stable for large alpha_u
-        log_term = torch.nn.functional.softplus(alpha_u)
-        
-        loss_matrix = w * log_term - S * alpha_u
-        loss = loss_matrix.mean()
+        # 4. Numerically stable pairwise weighted loss:
+        # Eq. (3) of HashNet: L = sum_ij w_ij * ( log(1 + exp(u_ij)) - s_ij * u_ij )
+        # For s_ij = 1: log(1 + exp(u_ij)) - u_ij = log(1 + exp(-u_ij)) = softplus(-u_ij)
+        # For s_ij = 0: log(1 + exp(u_ij)) = softplus(u_ij)
+        pair_loss = torch.where(
+            S > 0.5,
+            torch.nn.functional.softplus(-u),
+            torch.nn.functional.softplus(u),
+        )
+        weighted_loss = w * pair_loss
+        loss = weighted_loss.mean()
         
         return loss
 

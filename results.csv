@@ -1,0 +1,18 @@
+Method,Hash_Bits,Backbone,Paper_Survey_Ref,Reproduced_mAP,Difference_pp,Metric,Protocol_Mode,Status
+HashNet,16,AlexNet,64.3%,72.81%,+8.51 pp,mAP@44000 (Toàn bộ DB),survey_source (1k query / 44k gallery),Verified
+HashNet,16,AlexNet,N/A,60.93%,-,mAP@1000,survey_source (1k query / Top-1000),Verified
+HashNet,32,AlexNet,66.7%,59.75%,-6.95 pp,mAP@44000 (Toàn bộ DB),survey_source (1k query / 44k gallery),Verified
+HashNet,32,AlexNet,N/A,58.40%,-,mAP@1000,survey_source (1k query / Top-1000),Verified
+HashNet,16,AlexNet,50.6% (DeepHash ref),80.60%,+30.00 pp,mAP@35000 (Toàn bộ DB),original_paper (10k query / 35k gallery),Verified
+HashNet,16,AlexNet,N/A,80.88%,-,mAP@1000,original_paper (10k query / Top-1000),Verified
+HashNet,32,AlexNet,63.1% (DeepHash ref),65.19%,+2.09 pp,mAP@35000 (Toàn bộ DB),original_paper (10k query / 35k gallery),Verified
+HashNet,32,AlexNet,63.1% (DeepHash ref),66.96%,+3.86 pp,mAP@1000,original_paper (10k query / Top-1000),Verified
+HashNet,32,AlexNet,63.1% (DeepHash ref),58.79%,-4.31 pp,mAP@5000,original_paper (10k query / Top-5000),Verified
+HashNet (Bit-Decorr & Balance),16,AlexNet,64.3% (Base: 72.81%),72.88%,+8.58 pp (+0.07 vs Base),mAP@44000 (Toàn bộ DB),survey_source (1k query / 44k gallery),Verified (Improved)
+HashNet (Bit-Decorr & Balance),16,AlexNet,N/A (Base: 60.93%),64.82%,+3.89 pp vs Base,mAP@1000,survey_source (1k query / Top-1000),Verified (Improved)
+HashNet (Bit-Decorr & Balance),32,AlexNet,66.7% (Base: 59.75%),39.23%,-27.47 pp (Over-regularized lambda=0.1),mAP@44000 (Toàn bộ DB),survey_source (1k query / 44k gallery),Analyzed (Over-constrained)
+HashNet (Bit-Decorr & Balance),32,AlexNet,N/A (Base: 58.40%),32.90%,-25.50 pp vs Base,mAP@1000,survey_source (1k query / Top-1000),Analyzed (Over-constrained)
+DHN,16,AlexNet,56.8%,73.10%,+16.30 pp,mAP@44000 (Toàn bộ DB),survey_source (1k query / 44k gallery),Verified
+DHN,16,AlexNet,N/A,62.89%,-,mAP@1000,survey_source (1k query / Top-1000),Verified
+DHN (Bit-Decorr & Balance),16,AlexNet,56.8% (Base: 73.10%),73.94%,+17.14 pp (+0.84 vs Base),mAP@44000 (Toàn bộ DB),survey_source (1k query / 44k gallery),Verified (Improved)
+DHN (Bit-Decorr & Balance),16,AlexNet,N/A (Base: 62.89%),63.66%,+0.77 pp vs Base,mAP@1000,survey_source (1k query / Top-1000),Verified (Improved)

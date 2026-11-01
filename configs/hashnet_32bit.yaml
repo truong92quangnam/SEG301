@@ -8,7 +8,7 @@ pretrained: true
 
 training:
   batch_size: 64
-  epochs: 30
+  epochs: 40
   lr_backbone: 0.001
   lr_hash_head: 0.01
   momentum: 0.9

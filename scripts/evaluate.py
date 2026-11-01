@@ -30,6 +30,7 @@ from src.datasets.cifar10_handler import (
     get_default_transforms,
 )
 from src.models.hashnet import HashNetAlexNet
+from src.models.dhn import DHNAlexNet
 from src.evaluation.metrics import ChunkedEvaluator
 
 
@@ -47,9 +48,10 @@ def extract_features_and_codes(
     with torch.no_grad():
         for images, labels, orig_idx in loader:
             images = images.to(device)
-            # Continuous and raw logits
-            h, z = model(images, alpha=1.0)
-            # Binary codes in {-1, +1}
+            if "alpha" in model.forward.__code__.co_varnames:
+                h, z = model(images, alpha=1.0)
+            else:
+                h, z = model(images)
             b = torch.where(z >= 0, 1.0, -1.0)
 
             all_codes.append(b.cpu().numpy())
@@ -69,15 +71,17 @@ def main():
     parser.add_argument("--config", type=str, required=True, help="Path to config YAML")
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to checkpoint .pth")
     parser.add_argument("--output-dir", type=str, default=None, help="Output directory")
+    parser.add_argument("--topk", type=int, default=None, help="Override top-K cutoff")
     args = parser.parse_args()
 
     with open(args.config, "r") as f:
         config = yaml.safe_load(f)
 
     bits = config["hash_bits"]
-    topk = config["evaluation"]["topk"]
+    topk = args.topk if args.topk is not None else config["evaluation"]["topk"]
     chunk_size = config["evaluation"]["chunk_size"]
     out_dir = args.output_dir if args.output_dir else os.path.dirname(args.checkpoint)
+    os.makedirs(out_dir, exist_ok=True)
 
     device_str = "cuda" if (torch.cuda.is_available() and config["training"]["device"] == "cuda") else "cpu"
     device = torch.device(device_str)
@@ -111,10 +115,14 @@ def main():
     database_loader = DataLoader(database_dataset, batch_size=128, shuffle=False, num_workers=0)
 
     # Load Model
-    model = HashNetAlexNet(hash_bits=bits, pretrained=False).to(device)
+    model_name = config.get("model_name", "HashNet")
+    if model_name == "DHN":
+        model = DHNAlexNet(hash_bits=bits, pretrained=False).to(device)
+    else:
+        model = HashNetAlexNet(hash_bits=bits, pretrained=False).to(device)
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=True)
     model.load_state_dict(ckpt["model_state_dict"])
-    print(f"Loaded checkpoint from: {args.checkpoint}")
+    print(f"Loaded checkpoint for {model_name} from: {args.checkpoint}")
 
     # Extract Codes
     print("Extracting query binary codes...")
@@ -162,7 +170,7 @@ def main():
 
     # Save run_metadata.json
     metadata = {
-        "model": "HashNet",
+        "model": model_name,
         "hash_bits": bits,
         "mAP": map_score,
         "mAP_percentage": f"{map_score * 100:.2f}%",

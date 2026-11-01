@@ -22,4 +22,5 @@ data/
 # Outputs & temporary logs (giữ lại outputs/splits/manifest json qua git add nếu cần)
 outputs/experiments/
 *.log
+cifar-10-batches-py
 

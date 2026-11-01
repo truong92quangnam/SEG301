@@ -16,3 +16,18 @@ DHN,16,AlexNet,56.8%,73.10%,+16.30 pp,mAP@44000 (Toàn bộ DB),survey_source (1
 DHN,16,AlexNet,N/A,62.89%,-,mAP@1000,survey_source (1k query / Top-1000),Verified
 DHN (Bit-Decorr & Balance),16,AlexNet,56.8% (Base: 73.10%),73.94%,+17.14 pp (+0.84 vs Base),mAP@44000 (Toàn bộ DB),survey_source (1k query / 44k gallery),Verified (Improved)
 DHN (Bit-Decorr & Balance),16,AlexNet,N/A (Base: 62.89%),63.66%,+0.77 pp vs Base,mAP@1000,survey_source (1k query / Top-1000),Verified (Improved)
+HashNet,16,AlexNet,64.3%,71.50%,+7.20 pp,mAP@54000,survey_source (1k query / 54k gallery pickle),Verified
+HashNet,16,AlexNet,N/A,57.36%,-,mAP@1000,survey_source (1k query / 54k gallery pickle),Verified
+HashNet,32,AlexNet,66.7%,65.06%,-1.64 pp,mAP@54000,survey_source (1k query / 54k gallery pickle),Verified
+HashNet,32,AlexNet,N/A,56.15%,-,mAP@1000,survey_source (1k query / 54k gallery pickle),Verified
+HashNet (Bit-Decorr & Balance),16,AlexNet,64.3% (Base: 71.50%),71.03%,-0.47 pp vs Base,mAP@54000,survey_source (1k query / 54k gallery pickle),Verified
+HashNet (Calibrated Decorr),32,AlexNet,66.7% (Base: 65.06%),62.71%,-2.35 pp vs Base,mAP@54000,survey_source (1k query / 54k gallery pickle),Verified
+HashNet (Calibrated Decorr),32,AlexNet,N/A (Base: 56.15%),55.15%,-1.00 pp vs Base,mAP@1000,survey_source (1k query / 54k gallery pickle),Verified
+HashNet (Multi-task Cls),16,AlexNet,64.3% (Base: 71.50%),71.89%,+0.39 pp vs Base,mAP@54000,survey_source (1k query / 54k gallery pickle),Verified (Multi-task)
+HashNet (Multi-task Cls),16,AlexNet,N/A (Base: 57.36%),58.12%,+0.76 pp vs Base,mAP@1000,survey_source (1k query / 54k gallery pickle),Verified (Multi-task)
+HashNet (Multi-task Cls),32,AlexNet,66.7% (Base: 65.06%),71.58%,+6.52 pp vs Base (+4.88 vs Paper),mAP@54000,survey_source (1k query / 54k gallery pickle),Verified (Breakthrough)
+HashNet (Multi-task Cls),32,AlexNet,N/A (Base: 56.15%),63.70%,+7.55 pp vs Base,mAP@1000,survey_source (1k query / 54k gallery pickle),Verified (Breakthrough)
+DHN (Multi-task Cls),16,AlexNet,56.8% (Paper),70.23%,+13.43 pp vs Paper,mAP@54000,survey_source (1k query / 54k gallery pickle),Verified (Multi-task)
+DHN (Multi-task Cls),16,AlexNet,N/A,56.79%,-,mAP@1000,survey_source (1k query / 54k gallery pickle),Verified (Multi-task)
+DHN (Multi-task Cls),32,AlexNet,56.9% (Paper),73.04%,+16.14 pp vs Paper,mAP@54000,survey_source (1k query / 54k gallery pickle),Verified (Multi-task)
+DHN (Multi-task Cls),32,AlexNet,N/A,63.91%,-,mAP@1000,survey_source (1k query / 54k gallery pickle),Verified (Multi-task)

@@ -6,6 +6,10 @@ Executes:
 - Extracts binary codes and continuous embeddings for Query and Database sets
 - Runs memory-safe ChunkedEvaluator to compute mAP@K
 - Saves per-query metrics and run_metadata.json
+
+Supports two data sources (set via config 'data_source'):
+  - 'local_images' (default): PNG files from cifar-10/train/ directory
+  - 'pickle_batches': Binary pickle files from cifar-10-batches-py/
 """
 
 import argparse
@@ -28,6 +32,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.datasets.cifar10_handler import (
     LocalCIFAR10ImageDataset,
     get_default_transforms,
+)
+from src.datasets.cifar10_pickle_handler import (
+    Cifar10PickleDataset,
+    load_all_batches,
+    get_default_transforms as get_pickle_transforms,
 )
 from src.models.hashnet import HashNetAlexNet
 from src.models.dhn import DHNAlexNet
@@ -92,36 +101,71 @@ def main():
     with open(config["manifest_path"], "r") as f:
         manifest = json.load(f)
 
-    df_labels = pd.read_csv(os.path.join(config["data_dir"], "trainLabels.csv"))
-    _, test_transform = get_default_transforms()
-
     query_indices = manifest["splits"]["query_indices"]
     database_indices = manifest["splits"]["database_indices"]
+    data_source = config.get("data_source", "local_images")
+    _, test_transform = get_default_transforms()
 
-    query_dataset = LocalCIFAR10ImageDataset(
-        image_dir=os.path.join(config["data_dir"], "train"),
-        df_labels=df_labels,
-        indices=query_indices,
-        transform=test_transform,
-    )
-    database_dataset = LocalCIFAR10ImageDataset(
-        image_dir=os.path.join(config["data_dir"], "train"),
-        df_labels=df_labels,
-        indices=database_indices,
-        transform=test_transform,
-    )
+    if data_source == "pickle_batches":
+        print(f"Loading CIFAR-10 pickle batches from: {config['data_dir']}")
+        raw_data, raw_labels = load_all_batches(config["data_dir"])
+        _, test_transform_p = get_pickle_transforms()
+        query_dataset = Cifar10PickleDataset(
+            root_dir=config["data_dir"],
+            data=raw_data,
+            labels=raw_labels,
+            indices=query_indices,
+            transform=test_transform_p,
+        )
+        database_dataset = Cifar10PickleDataset(
+            root_dir=config["data_dir"],
+            data=raw_data,
+            labels=raw_labels,
+            indices=database_indices,
+            transform=test_transform_p,
+        )
+        df_labels = None  # not needed for pickle mode
+    else:
+        df_labels = pd.read_csv(os.path.join(config["data_dir"], "trainLabels.csv"))
+        query_dataset = LocalCIFAR10ImageDataset(
+            image_dir=os.path.join(config["data_dir"], "train"),
+            df_labels=df_labels,
+            indices=query_indices,
+            transform=test_transform,
+        )
+        database_dataset = LocalCIFAR10ImageDataset(
+            image_dir=os.path.join(config["data_dir"], "train"),
+            df_labels=df_labels,
+            indices=database_indices,
+            transform=test_transform,
+        )
 
     query_loader = DataLoader(query_dataset, batch_size=128, shuffle=False, num_workers=0)
     database_loader = DataLoader(database_dataset, batch_size=128, shuffle=False, num_workers=0)
 
     # Load Model
     model_name = config.get("model_name", "HashNet")
+    mt_config = config.get("multitask", {})
+    num_classes = mt_config.get("num_classes", 10) if mt_config.get("enabled", False) else None
+    cls_source = mt_config.get("cls_source", "hash")
+
     if model_name == "DHN":
-        model = DHNAlexNet(hash_bits=bits, pretrained=False).to(device)
+        model = DHNAlexNet(
+            hash_bits=bits,
+            pretrained=False,
+            num_classes=num_classes,
+            cls_source=cls_source,
+        ).to(device)
     else:
-        model = HashNetAlexNet(hash_bits=bits, pretrained=False).to(device)
+        model = HashNetAlexNet(
+            hash_bits=bits,
+            pretrained=False,
+            num_classes=num_classes,
+            cls_source=cls_source,
+        ).to(device)
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=True)
-    model.load_state_dict(ckpt["model_state_dict"])
+    # strict=False allows evaluating models with or without auxiliary cls_head smoothly
+    model.load_state_dict(ckpt["model_state_dict"], strict=False)
     print(f"Loaded checkpoint for {model_name} from: {args.checkpoint}")
 
     # Extract Codes
@@ -164,7 +208,8 @@ def main():
         writer = csv.writer(f)
         writer.writerow(["query_index", "original_image_id", "label", "AP"])
         for i, ap_val in enumerate(eval_res["AP_list"]):
-            orig_id = df_labels.iloc[q_orig_idx[i]]["id"]
+            # In pickle mode df_labels is None; use global index directly
+            orig_id = int(q_orig_idx[i]) if df_labels is None else df_labels.iloc[q_orig_idx[i]]["id"]
             lbl = q_labels[i]
             writer.writerow([i, orig_id, lbl, ap_val])
 

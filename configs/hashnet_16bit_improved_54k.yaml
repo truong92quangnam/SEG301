@@ -1,0 +1,36 @@
+# HashNet 16-bit Improved — mAP@54000 protocol
+# Bit-Decorrelation & Balance regularizer: lambda_balance=0.1, lambda_decorr=0.1
+# For 16-bit: C(16,2)=120 pairs — regularizer strength is appropriate
+
+dataset: "cifar10_pickle"
+data_source: "pickle_batches"
+data_dir: "cifar-10-batches-py"
+manifest_path: "outputs/splits/manifest_cifar10_60k_54k_gallery.json"
+model_name: "HashNet"
+backbone: "AlexNet"
+hash_bits: 16
+pretrained: true
+exp_name: "hashnet_16bit_improved_54k"
+
+training:
+  batch_size: 64
+  epochs: 40
+  lr_backbone: 0.001
+  lr_hash_head: 0.01
+  momentum: 0.9
+  weight_decay: 0.0005
+  gamma: 0.001
+  eval_interval: 5
+  seed: 2021
+  device: "cuda"
+
+regularization:
+  use_decorr_balance: true
+  lambda_balance: 0.1
+  lambda_decorr: 0.1
+
+evaluation:
+  topk: 54000
+  chunk_size: 200
+  mode: "survey_source"
+

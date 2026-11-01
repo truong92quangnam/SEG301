@@ -8,6 +8,10 @@ Executes:
 - Continuation schedule progression
 - Periodic validation evaluation (optional)
 - Checkpoint and training log saving
+
+Supports two data sources (set via config 'data_source'):
+  - 'local_images' (default): PNG files from cifar-10/train/ directory
+  - 'pickle_batches': Binary pickle files from cifar-10-batches-py/
 """
 
 import argparse
@@ -32,6 +36,11 @@ from src.datasets.cifar10_handler import (
     LocalCIFAR10ImageDataset,
     get_default_transforms,
 )
+from src.datasets.cifar10_pickle_handler import (
+    Cifar10PickleDataset,
+    load_all_batches,
+    get_default_transforms as get_pickle_transforms,
+)
 from src.models.hashnet import HashNetAlexNet
 from src.losses.hashnet_loss import HashNetLoss, ContinuationScheduler
 from src.losses.regularizers import BitDecorrelationAndBalanceLoss
@@ -47,9 +56,13 @@ def train_one_epoch(
     global_step: int,
     device: torch.device,
     regularizer: nn.Module = None,
-) -> Tuple[float, int, float]:
+    cls_criterion: nn.Module = None,
+    cls_weight: float = 1.0,
+) -> Tuple[float, int, float, float, float]:
     model.train()
     total_loss = 0.0
+    total_hash_loss = 0.0
+    total_cls_loss = 0.0
     num_batches = 0
     current_alpha = 1.0
 
@@ -60,8 +73,18 @@ def train_one_epoch(
         current_alpha = scheduler.get_alpha(global_step)
         
         optimizer.zero_grad()
-        h, z = model(images, alpha=current_alpha)
-        loss = criterion(h, labels, alpha=current_alpha)
+        if cls_criterion is not None and model.cls_head is not None:
+            h, z, cls_logits = model(images, alpha=current_alpha, return_logits=True)
+            hash_loss = criterion(h, labels, alpha=current_alpha)
+            cls_loss = cls_criterion(cls_logits, labels)
+            loss = hash_loss + cls_weight * cls_loss
+            total_hash_loss += hash_loss.item()
+            total_cls_loss += cls_loss.item()
+        else:
+            h, z = model(images, alpha=current_alpha)
+            loss = criterion(h, labels, alpha=current_alpha)
+            total_hash_loss += loss.item()
+
         if regularizer is not None:
             reg_loss, _, _ = regularizer(h)
             loss = loss + reg_loss
@@ -74,7 +97,9 @@ def train_one_epoch(
         global_step += 1
 
     epoch_loss = total_loss / max(1, num_batches)
-    return epoch_loss, global_step, current_alpha
+    avg_hash_loss = total_hash_loss / max(1, num_batches)
+    avg_cls_loss = total_cls_loss / max(1, num_batches) if cls_criterion is not None else 0.0
+    return epoch_loss, global_step, current_alpha, avg_hash_loss, avg_cls_loss
 
 
 def main():
@@ -110,16 +135,31 @@ def main():
         manifest = json.load(f)
     print(f"Loaded Manifest: {manifest_path} (SHA256: {manifest['sha256'][:16]}...)")
 
-    df_labels = pd.read_csv(os.path.join(config["data_dir"], "trainLabels.csv"))
-    train_transform, test_transform = get_default_transforms()
-
     train_indices = manifest["splits"]["train_indices"]
-    train_dataset = LocalCIFAR10ImageDataset(
-        image_dir=os.path.join(config["data_dir"], "train"),
-        df_labels=df_labels,
-        indices=train_indices,
-        transform=train_transform,
-    )
+    data_source = config.get("data_source", "local_images")
+
+    if data_source == "pickle_batches":
+        # Load all 60k images once, share across splits
+        print(f"Loading CIFAR-10 pickle batches from: {config['data_dir']}")
+        raw_data, raw_labels = load_all_batches(config["data_dir"])
+        train_transform, _ = get_pickle_transforms()
+        train_dataset = Cifar10PickleDataset(
+            root_dir=config["data_dir"],
+            data=raw_data,
+            labels=raw_labels,
+            indices=train_indices,
+            transform=train_transform,
+        )
+    else:
+        df_labels = pd.read_csv(os.path.join(config["data_dir"], "trainLabels.csv"))
+        train_transform, _ = get_default_transforms()
+        train_dataset = LocalCIFAR10ImageDataset(
+            image_dir=os.path.join(config["data_dir"], "train"),
+            df_labels=df_labels,
+            indices=train_indices,
+            transform=train_transform,
+        )
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -128,10 +168,26 @@ def main():
         pin_memory=(device_str == "cuda"),
     )
 
+    # Check Multi-task Classification configuration
+    mt_config = config.get("multitask", {})
+    use_multitask = mt_config.get("enabled", False)
+    num_classes = mt_config.get("num_classes", 10) if use_multitask else None
+    cls_source = mt_config.get("cls_source", "hash")
+    cls_weight = mt_config.get("cls_weight", 1.0)
+    cls_criterion = nn.CrossEntropyLoss().to(device) if use_multitask else None
+
     # Initialize Model
-    model = HashNetAlexNet(hash_bits=bits, pretrained=config["pretrained"]).to(device)
+    model = HashNetAlexNet(
+        hash_bits=bits,
+        pretrained=config["pretrained"],
+        num_classes=num_classes,
+        cls_source=cls_source,
+    ).to(device)
     criterion = HashNetLoss().to(device)
     cont_scheduler = ContinuationScheduler(gamma=gamma)
+
+    if use_multitask:
+        print(f"Active Multi-task: CrossEntropyLoss (cls_source={cls_source}, cls_weight={cls_weight}, num_classes={num_classes})")
 
     # Initialize Bit-Balance & Decorrelation regularizer if requested
     regularizer = None
@@ -144,12 +200,15 @@ def main():
         ).to(device)
         print(f"Active Regularizer: BitDecorrelationAndBalanceLoss(lambda_balance={lambda_bal}, lambda_decorr={lambda_dec})")
 
-    # Differential learning rate: 10x for hash head
+    # Differential learning rate: 10x for hash head and classification head
     backbone_params = list(model.features.parameters()) + list(model.classifier.parameters())
-    hash_head_params = list(model.hash_head.parameters())
+    head_params = list(model.hash_head.parameters())
+    if model.cls_head is not None:
+        head_params += list(model.cls_head.parameters())
+
     optimizer = optim.SGD([
         {"params": backbone_params, "lr": config["training"]["lr_backbone"]},
-        {"params": hash_head_params, "lr": config["training"]["lr_hash_head"]},
+        {"params": head_params, "lr": config["training"]["lr_hash_head"]},
     ], momentum=config["training"]["momentum"], weight_decay=config["training"]["weight_decay"])
 
     exp_name = args.exp_name or config.get("exp_name") or f"hashnet_{bits}bit"
@@ -157,7 +216,7 @@ def main():
     os.makedirs(exp_dir, exist_ok=True)
     log_csv_path = os.path.join(exp_dir, "training_logs.csv")
 
-    log_fields = ["epoch", "step", "loss", "alpha", "time_sec"]
+    log_fields = ["epoch", "step", "loss", "hash_loss", "cls_loss", "alpha", "time_sec"]
     with open(log_csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=log_fields)
         writer.writeheader()
@@ -167,12 +226,24 @@ def main():
 
     for epoch in range(1, epochs + 1):
         ep_start = time.time()
-        loss, global_step, alpha = train_one_epoch(
-            model, train_loader, criterion, optimizer, cont_scheduler, global_step, device, regularizer=regularizer
+        loss, global_step, alpha, hash_loss, cls_loss = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            cont_scheduler,
+            global_step,
+            device,
+            regularizer=regularizer,
+            cls_criterion=cls_criterion,
+            cls_weight=cls_weight,
         )
         ep_time = time.time() - ep_start
 
-        print(f"Epoch [{epoch:02d}/{epochs:02d}] | Loss: {loss:.4f} | Alpha: {alpha:.3f} | Step: {global_step} | Time: {ep_time:.1f}s")
+        if use_multitask:
+            print(f"Epoch [{epoch:02d}/{epochs:02d}] | Loss: {loss:.4f} (Hash: {hash_loss:.4f}, Cls: {cls_loss:.4f}) | Alpha: {alpha:.3f} | Step: {global_step} | Time: {ep_time:.1f}s")
+        else:
+            print(f"Epoch [{epoch:02d}/{epochs:02d}] | Loss: {loss:.4f} | Alpha: {alpha:.3f} | Step: {global_step} | Time: {ep_time:.1f}s")
 
         with open(log_csv_path, "a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=log_fields)
@@ -180,6 +251,8 @@ def main():
                 "epoch": epoch,
                 "step": global_step,
                 "loss": loss,
+                "hash_loss": hash_loss,
+                "cls_loss": cls_loss,
                 "alpha": alpha,
                 "time_sec": ep_time,
             })

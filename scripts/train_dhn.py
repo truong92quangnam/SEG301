@@ -4,6 +4,10 @@ Training pipeline for DHN (Deep Hashing Network) on CIFAR-10.
 Paper: "Deep Hashing Network for Efficient Similarity Retrieval" (AAAI 2016)
 Backbone: AlexNet (pretrained on ImageNet)
 Loss: Pairwise similarity loss + log-cosh quantization loss
+
+Supports two data sources (set via config 'data_source'):
+  - 'local_images' (default): PNG files from cifar-10/train/ directory
+  - 'pickle_batches': Binary pickle files from cifar-10-batches-py/
 """
 
 import argparse
@@ -28,6 +32,11 @@ from src.datasets.cifar10_handler import (
     LocalCIFAR10ImageDataset,
     get_default_transforms,
 )
+from src.datasets.cifar10_pickle_handler import (
+    Cifar10PickleDataset,
+    load_all_batches,
+    get_default_transforms as get_pickle_transforms,
+)
 from src.models.dhn import DHNAlexNet
 from src.losses.dhn_loss import DHNLoss
 from src.losses.regularizers import BitDecorrelationAndBalanceLoss
@@ -40,9 +49,13 @@ def train_one_epoch(
     optimizer: optim.Optimizer,
     device: torch.device,
     regularizer: nn.Module = None,
-) -> float:
+    cls_criterion: nn.Module = None,
+    cls_weight: float = 1.0,
+) -> Tuple[float, float, float]:
     model.train()
     total_loss = 0.0
+    total_hash_loss = 0.0
+    total_cls_loss = 0.0
     num_batches = 0
 
     for images, labels, _ in loader:
@@ -50,8 +63,18 @@ def train_one_epoch(
         labels = labels.to(device)
 
         optimizer.zero_grad()
-        u, _ = model(images)
-        loss = criterion(u, labels)
+        if cls_criterion is not None and model.cls_head is not None:
+            u, z, cls_logits = model(images, return_logits=True)
+            hash_loss = criterion(u, labels)
+            cls_loss = cls_criterion(cls_logits, labels)
+            loss = hash_loss + cls_weight * cls_loss
+            total_hash_loss += hash_loss.item()
+            total_cls_loss += cls_loss.item()
+        else:
+            u, z = model(images)
+            loss = criterion(u, labels)
+            total_hash_loss += loss.item()
+
         if regularizer is not None:
             reg_loss, _, _ = regularizer(u)
             loss = loss + reg_loss
@@ -63,7 +86,9 @@ def train_one_epoch(
         num_batches += 1
 
     epoch_loss = total_loss / max(1, num_batches)
-    return epoch_loss
+    avg_hash_loss = total_hash_loss / max(1, num_batches)
+    avg_cls_loss = total_cls_loss / max(1, num_batches) if cls_criterion is not None else 0.0
+    return epoch_loss, avg_hash_loss, avg_cls_loss
 
 
 def main():
@@ -81,7 +106,8 @@ def main():
     bits = config["hash_bits"]
     batch_size = config["training"]["batch_size"]
     seed = config["training"]["seed"]
-    lambda_quant = config["training"]["lambda_quant"]
+    # Support both key names for quantization lambda
+    lambda_quant = config["training"].get("lambda_quant", config["training"].get("q_lambda", 0.1))
 
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -96,16 +122,30 @@ def main():
     with open(manifest_path, "r") as f:
         manifest = json.load(f)
 
-    df_labels = pd.read_csv(os.path.join(config["data_dir"], "trainLabels.csv"))
-    train_transform, _ = get_default_transforms()
-
     train_indices = manifest["splits"]["train_indices"]
-    train_dataset = LocalCIFAR10ImageDataset(
-        image_dir=os.path.join(config["data_dir"], "train"),
-        df_labels=df_labels,
-        indices=train_indices,
-        transform=train_transform,
-    )
+    data_source = config.get("data_source", "local_images")
+
+    if data_source == "pickle_batches":
+        print(f"Loading CIFAR-10 pickle batches from: {config['data_dir']}")
+        raw_data, raw_labels = load_all_batches(config["data_dir"])
+        train_transform, _ = get_pickle_transforms()
+        train_dataset = Cifar10PickleDataset(
+            root_dir=config["data_dir"],
+            data=raw_data,
+            labels=raw_labels,
+            indices=train_indices,
+            transform=train_transform,
+        )
+    else:
+        df_labels = pd.read_csv(os.path.join(config["data_dir"], "trainLabels.csv"))
+        train_transform, _ = get_default_transforms()
+        train_dataset = LocalCIFAR10ImageDataset(
+            image_dir=os.path.join(config["data_dir"], "train"),
+            df_labels=df_labels,
+            indices=train_indices,
+            transform=train_transform,
+        )
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -114,8 +154,24 @@ def main():
         pin_memory=(device_str == "cuda"),
     )
 
-    model = DHNAlexNet(hash_bits=bits, pretrained=config["pretrained"]).to(device)
+    # Check Multi-task Classification configuration
+    mt_config = config.get("multitask", {})
+    use_multitask = mt_config.get("enabled", False)
+    num_classes = mt_config.get("num_classes", 10) if use_multitask else None
+    cls_source = mt_config.get("cls_source", "hash")
+    cls_weight = mt_config.get("cls_weight", 1.0)
+    cls_criterion = nn.CrossEntropyLoss().to(device) if use_multitask else None
+
+    model = DHNAlexNet(
+        hash_bits=bits,
+        pretrained=config["pretrained"],
+        num_classes=num_classes,
+        cls_source=cls_source,
+    ).to(device)
     criterion = DHNLoss(lambda_quant=lambda_quant).to(device)
+
+    if use_multitask:
+        print(f"Active Multi-task: CrossEntropyLoss (cls_source={cls_source}, cls_weight={cls_weight}, num_classes={num_classes})")
 
     # Initialize Bit-Balance & Decorrelation regularizer if requested
     regularizer = None
@@ -129,10 +185,13 @@ def main():
         print(f"Active Regularizer: BitDecorrelationAndBalanceLoss(lambda_balance={lambda_bal}, lambda_decorr={lambda_dec})")
 
     backbone_params = list(model.features.parameters()) + list(model.classifier.parameters())
-    hash_head_params = list(model.hash_head.parameters())
+    head_params = list(model.hash_head.parameters())
+    if model.cls_head is not None:
+        head_params += list(model.cls_head.parameters())
+
     optimizer = optim.SGD([
         {"params": backbone_params, "lr": config["training"]["lr_backbone"]},
-        {"params": hash_head_params, "lr": config["training"]["lr_hash_head"]},
+        {"params": head_params, "lr": config["training"]["lr_hash_head"]},
     ], momentum=config["training"]["momentum"], weight_decay=config["training"]["weight_decay"])
 
     exp_name = args.exp_name or config.get("exp_name") or f"dhn_{bits}bit"
@@ -140,7 +199,7 @@ def main():
     os.makedirs(exp_dir, exist_ok=True)
     log_csv_path = os.path.join(exp_dir, "training_logs.csv")
 
-    log_fields = ["epoch", "step", "loss", "time_sec"]
+    log_fields = ["epoch", "step", "loss", "hash_loss", "cls_loss", "time_sec"]
     with open(log_csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=log_fields)
         writer.writeheader()
@@ -150,11 +209,23 @@ def main():
 
     for epoch in range(1, epochs + 1):
         ep_start = time.time()
-        loss = train_one_epoch(model, train_loader, criterion, optimizer, device, regularizer=regularizer)
+        loss, hash_loss, cls_loss = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            device,
+            regularizer=regularizer,
+            cls_criterion=cls_criterion,
+            cls_weight=cls_weight,
+        )
         global_step += len(train_loader)
         ep_time = time.time() - ep_start
 
-        print(f"Epoch [{epoch:02d}/{epochs:02d}] | Loss: {loss:.4f} | Step: {global_step} | Time: {ep_time:.1f}s")
+        if use_multitask:
+            print(f"Epoch [{epoch:02d}/{epochs:02d}] | Loss: {loss:.4f} (Hash: {hash_loss:.4f}, Cls: {cls_loss:.4f}) | Step: {global_step} | Time: {ep_time:.1f}s")
+        else:
+            print(f"Epoch [{epoch:02d}/{epochs:02d}] | Loss: {loss:.4f} | Step: {global_step} | Time: {ep_time:.1f}s")
 
         with open(log_csv_path, "a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=log_fields)
@@ -162,6 +233,8 @@ def main():
                 "epoch": epoch,
                 "step": global_step,
                 "loss": loss,
+                "hash_loss": hash_loss,
+                "cls_loss": cls_loss,
                 "time_sec": ep_time,
             })
 

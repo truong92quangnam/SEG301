@@ -1,0 +1,12 @@
+{
+  "model": "HashNet",
+  "hash_bits": 16,
+  "mAP": 0.8059748379173584,
+  "mAP_percentage": "80.60%",
+  "topk": 35000,
+  "checkpoint": "outputs/experiments/hashnet_16bit/checkpoint_final.pth",
+  "manifest_sha256": "4cf3b0eae4fd8709d707aaea878d4ead31b2750df18277aafda56d429f3954b5",
+  "num_query": 10000,
+  "num_database": 35000,
+  "timestamp": "2026-10-14 09:20:42"
+}

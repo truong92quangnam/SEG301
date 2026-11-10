@@ -1,0 +1,12 @@
+{
+  "model": "HashNet",
+  "hash_bits": 16,
+  "mAP": 0.11436263900095002,
+  "mAP_percentage": "11.44%",
+  "topk": 44000,
+  "checkpoint": "outputs/experiments/gpu_smoke_test/hashnet_16bit/checkpoint_final.pth",
+  "manifest_sha256": "67d9c84586abf7919fbb49d4bc4ccd8739215842928cf25c7f208bc7d9b71da6",
+  "num_query": 1000,
+  "num_database": 44000,
+  "timestamp": "2026-10-12 23:56:30"
+}

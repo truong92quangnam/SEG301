@@ -1,0 +1,12 @@
+{
+  "model": "DHN",
+  "hash_bits": 16,
+  "mAP": 0.730961820836985,
+  "mAP_percentage": "73.10%",
+  "topk": 44000,
+  "checkpoint": "outputs/experiments/dhn_16bit/checkpoint_final.pth",
+  "manifest_sha256": "67d9c84586abf7919fbb49d4bc4ccd8739215842928cf25c7f208bc7d9b71da6",
+  "num_query": 1000,
+  "num_database": 44000,
+  "timestamp": "2026-11-01 18:15:15"
+}

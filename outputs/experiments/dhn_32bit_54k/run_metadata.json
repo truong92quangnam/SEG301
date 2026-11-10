@@ -1,0 +1,15 @@
+{
+  "model": "DHN",
+  "hash_bits": 32,
+  "mAP": 0.6847062360355295,
+  "mAP_percentage": "68.47%",
+  "mAP_unbiased_mean": 0.696587776719635,
+  "mAP_unbiased_std": 0.00019492697398535807,
+  "mAP_unbiased_percentage": "69.66% \u00b1 0.02%",
+  "topk": 54000,
+  "checkpoint": "outputs/experiments/dhn_32bit_54k/checkpoint_final.pth",
+  "manifest_sha256": "4c05334471feb7efd5c9e240040a2cd26e4554642c939747199445c450def4cf",
+  "num_query": 1000,
+  "num_database": 54000,
+  "timestamp": "2026-11-10 23:45:45"
+}

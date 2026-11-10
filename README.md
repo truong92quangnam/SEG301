@@ -233,5 +233,5 @@ Toàn bộ các số liệu dưới đây được đo đạc thực tế trên 
 ### 6.4. Kiểm Chứng & Tải Tài Nguyên (Artifacts & Checkpoints)
 - **Training Logs & Metadata:** Toàn bộ log huấn luyện theo từng epoch (`training_logs.csv`), thông số phần cứng & siêu tham số (`run_metadata.json`), và độ đo chi tiết từng query (`per_query_metrics.csv`) của tất cả các run chính được lưu trữ trực tiếp trong thư mục `outputs/experiments/` của kho mã nguồn.
 - **Weights & Extracted Binary Codes:** Do dung lượng file nhị phân lớn (~228 MB/checkpoint), các file checkpoint `.pth` và mã băm trích xuất `.npz` được chia sẻ qua Google Drive:
-  - **Drive Archive:** `https://drive.google.com/drive/folders/deep-hashing-cifar10-checkpoints`
+  - **Drive Archive:** `https://drive.google.com/file/d/1GMzEpWei3FgqTzGxatg8rklQyt6Fikct/view?usp=sharing`
   - Tải và đặt vào thư mục tương ứng `outputs/experiments/<model_name>/` để chạy tái lập trực tiếp bằng script `scripts/eval_npz.py`.

@@ -149,9 +149,13 @@ class ChunkedEvaluator:
         database_codes: Union[np.ndarray, torch.Tensor],
         query_labels: Union[np.ndarray, torch.Tensor],
         database_labels: Union[np.ndarray, torch.Tensor],
+        shuffle_seed: Optional[int] = None,
     ) -> Dict[str, Union[float, List[float]]]:
         """
         Evaluates mAP@K efficiently.
+        Args:
+            shuffle_seed: If provided, randomly permutes database gallery order before evaluation
+                          to ensure completely unbiased tie-breaking across equal Hamming distances.
         """
         if isinstance(query_codes, np.ndarray):
             query_codes = torch.from_numpy(query_codes)
@@ -161,6 +165,13 @@ class ChunkedEvaluator:
             query_labels = torch.from_numpy(query_labels)
         if isinstance(database_labels, np.ndarray):
             database_labels = torch.from_numpy(database_labels)
+
+        # Optional gallery permutation for unbiased tie-breaking:
+        if shuffle_seed is not None:
+            rng = np.random.RandomState(shuffle_seed)
+            perm = rng.permutation(database_codes.shape[0])
+            database_codes = database_codes[perm]
+            database_labels = database_labels[perm]
 
         # Standardize codes to {-1, +1} float tensor for matrix inner-product:
         # Hamming distance = 0.5 * (K - q * d^T)

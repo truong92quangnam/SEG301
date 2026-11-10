@@ -14,13 +14,17 @@ data/
 *.tar.gz
 *.csv.gz
 
-# Checkpoints & heavy model weights
+# Checkpoints & heavy model weights (avoid storing ~230MB binary weights in git)
 *.pth
 *.pt
 *.npz
 
-# Outputs & temporary logs (giữ lại outputs/splits/manifest json qua git add nếu cần)
-outputs/experiments/
+# Outputs: allow tracking experiment logs, metadata, and per-query metrics for auditability
+outputs/experiments/**/checkpoint*.pth
+outputs/experiments/**/*.npz
+!outputs/experiments/**/training_logs.csv
+!outputs/experiments/**/run_metadata.json
+!outputs/experiments/**/per_query_metrics.csv
 *.log
 cifar-10-batches-py
 

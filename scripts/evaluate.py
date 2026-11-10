@@ -196,10 +196,19 @@ def main():
     print(f"Computing mAP@{topk} using ChunkedEvaluator...")
     evaluator = ChunkedEvaluator(topk=topk, chunk_size=chunk_size, device="cpu")
     eval_res = evaluator.evaluate(q_codes, d_codes, q_labels, d_labels)
-
     map_score = eval_res["mAP"]
+
+    # Compute unbiased tie-breaking mAP across 3 seeds (seeds 42, 123, 999)
+    shf_maps = []
+    for s in [42, 123, 999]:
+        shf_res = evaluator.evaluate(q_codes, d_codes, q_labels, d_labels, shuffle_seed=s)
+        shf_maps.append(shf_res["mAP"])
+    shf_mean = float(np.mean(shf_maps))
+    shf_std = float(np.std(shf_maps))
+
     print(f"\n==========================================")
-    print(f"Result: HashNet {bits}-bit mAP@{topk} = {map_score * 100:.2f}% ({map_score:.4f})")
+    print(f"Result: {model_name} {bits}-bit mAP@{topk} (Original) = {map_score * 100:.2f}% ({map_score:.4f})")
+    print(f"Result: {model_name} {bits}-bit mAP@{topk} (Unbiased Tie-Break 3 seeds) = {shf_mean * 100:.2f}% ± {shf_std * 100:.2f}%")
     print(f"==========================================\n")
 
     # Save per_query_metrics.csv
@@ -219,6 +228,9 @@ def main():
         "hash_bits": bits,
         "mAP": map_score,
         "mAP_percentage": f"{map_score * 100:.2f}%",
+        "mAP_unbiased_mean": shf_mean,
+        "mAP_unbiased_std": shf_std,
+        "mAP_unbiased_percentage": f"{shf_mean * 100:.2f}% ± {shf_std * 100:.2f}%",
         "topk": topk,
         "checkpoint": args.checkpoint,
         "manifest_sha256": manifest["sha256"],

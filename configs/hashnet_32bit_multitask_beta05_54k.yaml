@@ -1,0 +1,33 @@
+# HashNet 32-bit Ablation: Beta = 0.5
+dataset: "cifar10_pickle"
+data_source: "pickle_batches"
+data_dir: "cifar-10-batches-py"
+manifest_path: "outputs/splits/manifest_cifar10_60k_54k_gallery.json"
+model_name: "HashNet"
+backbone: "AlexNet"
+hash_bits: 32
+pretrained: true
+exp_name: "hashnet_32bit_multitask_beta05_54k"
+
+training:
+  batch_size: 64
+  epochs: 40
+  lr_backbone: 0.001
+  lr_hash_head: 0.01
+  momentum: 0.9
+  weight_decay: 0.0005
+  gamma: 0.001
+  eval_interval: 5
+  seed: 2021
+  device: "cuda"
+
+multitask:
+  enabled: true
+  num_classes: 10
+  cls_source: "hash"
+  cls_weight: 0.5
+
+evaluation:
+  topk: 54000
+  chunk_size: 200
+  mode: "survey_source"

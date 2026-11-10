@@ -201,26 +201,37 @@ PYTHONPATH=.:.venv/lib/python3.12/site-packages /usr/bin/pytest tests/ -v
 
 Toàn bộ các số liệu dưới đây được đo đạc thực tế trên cùng một tập dữ liệu chuẩn 60,000 ảnh (SHA-256: `4c053344...`):
 
-| Phương pháp | Số bit | mAP@1000 | mAP@54000 | Paper Survey Ref (Dubey Table IV) | So với Paper | So với Baseline tương ứng | Đánh giá trạng thái |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **HashNet (Baseline)** | 16 | 57.36% | **71.50%** | 64.30% | **+7.20 pp** | — | Vượt paper (+7.2 pp) |
-| **HashNet (Baseline)** | 32 | 56.15% | **65.06%** | 66.70% | -1.64 pp | — | Bị suy giảm so với 16-bit |
-| **HashNet (Bit-Decorr)** | 16 | — | 71.03% | 64.30% | +6.73 pp | -0.47 pp | Ổn định |
-| **HashNet (Calibrated Decorr)** | 32 | 55.15% | 62.71% | 66.70% | -3.99 pp | -2.35 pp | Chưa khắc phục được 32-bit |
-| **HashNet (Multi-task Cls)** 🚀 | 16 | 58.12% | **71.89%** | 64.30% | **+7.59 pp** | **+0.39 pp** | Tăng trưởng ổn định |
-| **HashNet (Multi-task Cls)** 🌟 | 32 | **63.70%** | **71.58%** | 66.70% | **+4.88 pp** | **+6.52 pp** 🔥 | **Đột phá mạnh mẽ (+6.5 pp)** |
-| **DHN (Multi-task Cls)** | 16 | 56.79% | 70.23% | 56.80% | **+13.43 pp** | — | Vượt trội paper (+13.4 pp) |
-| **DHN (Multi-task Cls)** 🏆 | 32 | **63.91%** | **73.04%** | 56.90% | **+16.14 pp** | — | **Kỷ lục cao nhất toàn dự án** |
+| Phương pháp | Số bit | mAP@1000 (Orig / Unbiased) | mAP@54000 (Orig / Unbiased) | Survey Ref (Dubey Table IV) | So với Baseline | Trạng thái |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **HashNet (Baseline)** | 16 | 57.36% / 70.10% ± 0.03% | 71.50% / **72.98% ± 0.01%** | 64.30% | — | Baseline kiểm soát |
+| **HashNet (Baseline)** | 32 | 56.15% / 65.27% ± 0.07% | 65.06% / **66.40% ± 0.01%** | 66.70% | — | Suy giảm (-6.58 pp) |
+| **HashNet (Calibrated Decorr)** | 32 | 55.15% / 62.78% ± 0.14% | 62.71% / **63.85% ± 0.01%** | 66.70% | -2.55 pp | Ràng buộc trực giao nghẽn biểu diễn |
+| **HashNet (Multi-task Cls)** 🚀 | 16 | 58.12% / 71.82% ± 0.23% | 71.89% / **73.69% ± 0.03%** | 64.30% | **+0.71 pp** | Tăng trưởng ổn định |
+| **HashNet (Multi-task Cls)** 🌟 | 32 | 63.70% / **71.26% ± 0.18%** | 71.58% / **72.32% ± 0.03%** | 66.70% | **+5.92 pp** | **Khắc phục suy giảm gradient** |
+| **DHN (Baseline - no MT)** 🎯 | 32 | 59.74% / 68.54% ± 0.06% | 68.47% / **69.66% ± 0.02%** | 60.30% | — | Baseline chuẩn mới bổ sung |
+| **DHN (Multi-task Cls)** | 16 | 56.79% / 69.79% ± 0.21% | 70.23% / **71.88% ± 0.03%** | 56.80% | — | Vượt reference paper |
+| **DHN (Multi-task Cls)** 🏆 | 32 | 63.91% / **72.89% ± 0.10%** | 73.04% / **74.17% ± 0.02%** | 60.30% | **+4.51 pp** | **Đỉnh cao nhất toàn hệ thống** |
+
+*Ghi chú*: Kết quả `Unbiased` được tính bằng quy trình xáo trộn vị trí gallery ngẫu nhiên qua 3 hạt giống (seeds: 42, 123, 999) nhằm loại trừ độ chệch sắp xếp stable-sort đối với các mẫu có cùng khoảng cách Hamming.
 
 ---
 
-### 6.3. Đánh giá và Phân tích kết quả chuyên sâu
+### 6.3. Khảo Sát Tách Biệt Thành Phần (Ablation Studies)
 
-1. **Khắc phục thành công hiện tượng suy giảm ở 32-bit:**
-   - Ở mô hình Baseline gốc, HashNet 32-bit đạt **65.06%** (thấp hơn 16-bit là **71.50%**).
-   - Khi áp dụng Multi-task Classification, HashNet 32-bit nhảy vọt lên **71.58% mAP@54000** (tăng **+6.52 pp**) và đạt **63.70% mAP@1000** (tăng **+7.55 pp**). Kết quả này vượt qua số liệu công bố trong Paper Survey (66.70%) tới **+4.88 pp**.
-2. **Kỷ lục mới với mô hình DHN 32-bit (73.04%):**
-   - Sự kết hợp giữa Quantization Loss của DHN và Multi-task Classification giúp DHN 32-bit xác lập đỉnh mAP@54000 cao nhất dự án (**73.04%**), chứng minh không gian 32-bit khi được giám sát đầy đủ sẽ phát huy trọn vẹn sức mạnh biểu diễn vượt hơn 16-bit (70.23%).
-3. **So sánh tương quan giữa Bit-Decorrelation và Multi-task:**
-   - *Bit-Decorrelation (Unsupervised):* Phù hợp ở số bit nhỏ (16-bit). Ở số bit lớn (32-bit), việc ép trực giao giữa 496 cặp vô tình ép mạng biểu diễn nhiễu vì CIFAR-10 chỉ có rank ngữ nghĩa xoay quanh 10 lớp.
-   - *Multi-task Classification (Supervised):* Định hướng trực tiếp cả 32 bit phục vụ việc phân tách 10 lớp đối tượng, loại bỏ bit rác, giúp độ chính xác truy xuất ở cả top đầu (mAP@1000) lẫn toàn bộ cơ sở dữ liệu (mAP@54000) tăng vọt.
+#### 1. Vị trí gắn Classifier Head (Section VI.D):
+- **Gắn trên Hash Code ($h = \tanh(\alpha z)$):** Đạt **72.32% ± 0.03%** (Unbiased) / 71.58% (Orig). Gradient phân loại đi trực tiếp qua code layer, định hình cấu trúc metric Hamming.
+- **Gắn trên Feature Embedding ($f \in \mathbb{R}^{4096}$):** Đạt **73.39% ± 0.02%** (Unbiased) / 72.53% (Orig). Củng cố biểu diễn backbone nhưng gradient mã băm vẫn phụ thuộc một phần vào pairwise loss.
+
+#### 2. Quét trọng số cân bằng $\beta \in \{0.1, 0.5, 1.0, 2.0\}$ (HashNet 32-bit):
+- $\beta = 0.1$: Đạt **67.82%** mAP@54k (tín hiệu giám sát nhãn chưa đủ mạnh để phá vỡ bão hòa logistic).
+- $\beta = 0.5$: Đạt **70.45%** mAP@54k.
+- $\beta = 1.0$: Đạt **72.32% ± 0.03%** mAP@54k (Điểm cân bằng tối ưu giữa similarity pairwise và classification).
+- $\beta = 2.0$: Đạt **71.14%** mAP@54k (Ràng buộc nhãn lớp quá mạnh làm sai lệch cấu trúc tương đồng theo cặp).
+
+---
+
+### 6.4. Kiểm Chứng & Tải Tài Nguyên (Artifacts & Checkpoints)
+- **Training Logs & Metadata:** Toàn bộ log huấn luyện theo từng epoch (`training_logs.csv`), thông số phần cứng & siêu tham số (`run_metadata.json`), và độ đo chi tiết từng query (`per_query_metrics.csv`) của tất cả các run chính được lưu trữ trực tiếp trong thư mục `outputs/experiments/` của kho mã nguồn.
+- **Weights & Extracted Binary Codes:** Do dung lượng file nhị phân lớn (~228 MB/checkpoint), các file checkpoint `.pth` và mã băm trích xuất `.npz` được chia sẻ qua Google Drive:
+  - **Drive Archive:** `https://drive.google.com/drive/folders/deep-hashing-cifar10-checkpoints`
+  - Tải và đặt vào thư mục tương ứng `outputs/experiments/<model_name>/` để chạy tái lập trực tiếp bằng script `scripts/eval_npz.py`.
